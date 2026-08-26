@@ -1,4 +1,4 @@
 interface:
   display_name: "Git 集成交付"
-  short_description: "按团队集成分支流程将功能变更安全交付到开发和测试环境分支"
-  default_prompt: "请使用 $git-integration-delivery 将当前功能分支按流程交付到 dev 和 test。"
+  short_description: "按 FarmLynk 集成、发布、回灌门禁安全交付代码"
+  default_prompt: "请使用 $git-integration-delivery 按 FarmLynk 规则准备当前分支的环境交付或 release。"
