@@ -15,7 +15,8 @@ rX.Y.Z -> main
 
 - 功能分支允许积累多次连贯提交和 push；默认在形成可独立验证的小批次后，才合入一次 integration，不让 integration 跟随每次中间 push。
 - 防止功能分支直接合并到 `dev`、`test` 或 `main`；`integration/dev`、`integration/test` 也不能相互合并。
-- 在本地独立 worktree 中解决交付冲突，保留功能工作区不受影响。
+- 在本地独立 worktree 中保留冲突现场，分析业务、契约、迁移和部署影响，返回审阅并等待使用者处理。
+- 每次 commit 前审阅完整拟提交 diff，按严重度报告高风险；`Critical` 或 `High` 发现必须返回使用者处理。
 - 将提交、功能分支推送、integration 推送、MR 创建、MR 合并、release 标签和部署视为独立授权动作。
 - 用精确的 Git SHA、MR、流水线、部署和运行态证据区分“代码已合入”与“生产已完成”。
 
@@ -46,7 +47,7 @@ cp -R git-integration-delivery/git-integration-delivery ~/.codex/skills/
 使用 $git-integration-delivery 将当前功能分支按流程交付到 dev 和 test。
 ```
 
-Skill 会先核对分支、工作区、远端引用、已有 MR、待交付批次 SHA，以及项目自己的聚焦验证命令。准备环境交付时，它会在相应 integration worktree 中同步环境基线、合并该批次、检查 diff 并运行验证。
+Skill 会先核对分支、工作区、远端引用、已有 MR、待交付批次 SHA，以及项目自己的聚焦验证命令。准备环境交付时，它会在相应 integration worktree 中同步环境基线，并用 `--no-commit` 准备合并结果，确保 commit 前可以审阅完整 diff。
 
 只有在当前请求明确授权时，Skill 才会执行相应的远端动作：
 
@@ -61,11 +62,12 @@ Skill 会先核对分支、工作区、远端引用、已有 MR、待交付批�
 ## 交付检查点
 
 1. 确认本次是完整、可独立验证的功能分支批次；中间 push 默认仍留在功能分支。
-2. `integration/<environment>` 存在，且先与远端和对应环境基线同步。
-3. 功能分支通过显式 merge commit 合入 integration worktree；冲突只在该 worktree 解决。
-4. 对比 `origin/<environment>...HEAD`，检查提交、预期 diff、空白错误与聚焦测试；有迁移时执行迁移门禁。
-5. 推送后，MR 必须回读并确认源分支、目标分支、标题、开放状态和描述格式。
-6. 生产标签必须指向确认的 release SHA；流水线成功、部署 MR 合并、预期镜像运行、Pod Ready、迁移和关键验收都完成后，才能称为生产完成。
+2. `integration/<environment>` 存在，且先在独立 worktree 中与远端和对应环境基线同步；基线分叉时先完成一次独立的审阅与 merge commit，再开始功能合并。
+3. 合并出现冲突时保留现场，只读分析各方意图、业务与下游影响、解决选项和验证要求，返回使用者审阅并等待处理。
+4. 每个普通或 merge commit 前检查完整 staged diff、未纳入改动、契约兼容性和高风险面，并在干净 worktree 或隔离快照中验证精确 staged 版本；`Critical` 或 `High` 发现阻断提交，没有阻断项时仍需当前请求已明确授权提交。
+5. commit 后对比 `origin/<environment>...HEAD`，检查提交、预期 diff、空白错误与聚焦测试；有迁移时执行迁移门禁。
+6. 推送后，MR 必须回读并确认源分支、目标分支、标题、开放状态和描述格式。
+7. 生产标签必须指向确认的 release SHA；流水线成功、部署 MR 合并、预期镜像运行、Pod Ready、迁移和关键验收都完成后，才能称为生产完成。
 
 ## MR 描述格式
 
@@ -80,7 +82,8 @@ MR 描述需要是真实 Markdown，而不是把 `\\n` 拼入单行 shell 参数
 ├── .gitignore
 └── git-integration-delivery/
     ├── SKILL.md
-    └── agents/openai.yaml
+    ├── agents/openai.yaml
+    └── references/conflict-and-pre-commit-review.md
 ```
 
 根目录文件服务于 GitHub 使用者；真正安装到 Codex 的目录是 `git-integration-delivery/`。

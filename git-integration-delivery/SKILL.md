@@ -1,6 +1,6 @@
 ---
 name: git-integration-delivery
-description: Safely deliver FarmLynk backend changes through integration branches, controlled release branches, production tags, deployment verification, and main. Use for FarmLynk branch handoffs, release preparation, production tags, recovery, or merge-request work; for other repositories, inspect and follow their own local policy.
+description: Safely deliver FarmLynk backend changes through integration branches, controlled release branches, production tags, deployment verification, and main, with conflict-impact and pre-commit risk review gates. Use for FarmLynk branch handoffs, commits, conflict analysis, release preparation, production tags, recovery, or merge-request work; for other repositories, inspect and follow their own local policy.
 ---
 
 # FarmLynk Git Delivery And Release
@@ -26,6 +26,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
 - A request to "deliver" does not authorize a push, MR, tag, MR merge, or deployment. A production-tag push is a distinct high-impact authorization because it requests production deployment.
 - Only an authorized owner merges an MR to `dev`, `test`, `main`, or a protected release branch. Only QA or the release owner merges the deployment-repository MR and confirms production acceptance.
 - Preserve unrelated tracked and untracked files. Never stage, commit, push, or add local verification files, `.env` files, credentials, environment addresses, test data, or temporary scripts.
+- Treat conflict review and pre-commit review as mandatory gates. A prior request to deliver or commit does not authorize resolving conflicts or crossing a `Critical` or `High` finding.
 
 ## Branch Rules
 
@@ -65,7 +66,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
    git diff --check
    ```
 
-4. Before an ordinary feature commit, verify the branch's baseline. For a normal branch this is `origin/main`; if it intentionally uses an environment baseline, make the dependency explicit in the MR.
+4. Before an ordinary feature commit, verify the branch's baseline. For a normal branch this is `origin/main`; if it intentionally uses an environment baseline, make the dependency explicit in the MR. Follow **Review Before Every Commit** before creating the commit.
 5. For every MR, state business behavior, API/configuration/database-migration effects, validation commands and results, rollback considerations when relevant, and untested boundaries. Build Markdown descriptions with real newlines, then read the stored description back before reporting the MR.
 
    ```bash
@@ -73,6 +74,22 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
    glab mr create --source-branch <source> --target-branch <target> --description "$mr_description"
    glab mr view <iid> --output json --jq .description
    ```
+
+## Analyze Conflicts And Wait
+
+Before starting a conflict-prone delivery or release operation, use a dedicated worktree for its target branch; do not use the user's active dirty or source worktree. When any merge, cherry-pick, revert, or rebase reports conflicts, keep the operation and conflict files in that worktree, then follow [Conflict And Pre-Commit Review](references/conflict-and-pre-commit-review.md#conflict-impact-review).
+
+- Preserve the conflict state without editing, staging, continuing, committing, aborting, or restarting the operation.
+- Use the reference to inspect the actual conflict stages and affected behavior, report the impact and resolution tradeoffs, then stop and wait for the user to handle the resolution or give a new instruction.
+- After the user reports the resolution complete, verify that no unmerged entries remain, inspect the complete resolved result and its downstream effects, run the applicable validation, then follow **Review Before Every Commit**. Do not assume that removing conflict markers produced a correct merge.
+
+## Review Before Every Commit
+
+Before every ordinary, merge, release-fix, revert, or conflict-resolution commit, follow [Conflict And Pre-Commit Review](references/conflict-and-pre-commit-review.md#pre-commit-risk-review).
+
+1. Use the reference to review the exact staged tree against the correct baseline, isolate validation from unstaged and untracked state, and report findings by severity with untested boundaries and residual risks.
+2. Treat every `Critical` or `High` finding, including a validation gap that could conceal one, as a blocker. Return the review without changing the proposed commit and wait for a new instruction.
+3. With no blocker, commit only when the current request explicitly authorizes committing after review; otherwise return the review and wait. Re-run the review if the index changes after it was reviewed.
 
 ## Deliver To An Environment
 
@@ -92,26 +109,32 @@ Run this procedure independently for `integration/dev` with baseline `origin/dev
 
    - If `origin/<environment>` is already an ancestor of the integration branch, continue.
    - If the integration branch is an ancestor of `origin/<environment>`, fast-forward it.
-   - If both contain unique commits, merge `origin/<environment>` locally into the integration branch and resolve conflicts there.
+   - If both contain unique commits, start a non-committing merge of `origin/<environment>` locally into the integration branch. If it conflicts, follow **Analyze Conflicts And Wait**. If it merges cleanly, run the applicable migration checks and validation, follow **Review Before Every Commit**, and complete this baseline merge commit only after authorization.
 
    ```bash
    git merge-base --is-ancestor origin/<environment> integration/<environment>
    git merge-base --is-ancestor integration/<environment> origin/<environment>
+   # Run only when the integration branch can fast-forward.
    git merge --ff-only origin/<environment>
+   # Run instead only when both sides contain unique commits.
+   git merge --no-ff --no-commit origin/<environment>
    ```
 
-4. Merge the source branch with an explicit merge commit. Resolve conflicts only in this local integration worktree. Review the complete merged result, not only conflict-marker files.
+   Verify the baseline merge commit and a clean index before continuing. Never start the source merge while this baseline merge is still pending.
+
+4. Start the source merge without creating its merge commit. If it conflicts, follow **Analyze Conflicts And Wait**. If it merges cleanly, leave the result staged and follow **Review Before Every Commit**.
 
    ```bash
-   git merge --no-ff <feature-or-fix-branch>
+   git merge --no-ff --no-commit <feature-or-fix-branch>
    git status --short
-   git diff --check
-   git diff --stat origin/<environment>...HEAD
+   git diff --cached --check
+   git diff --cached --stat origin/<environment>
    ```
 
-5. If migrations are present, follow **Migration Gates** before testing. Then run the agreed focused validation against the merged integration code and state exactly what was and was not tested.
-6. Before requesting the explicit push/MR authorization, report the integration branch and SHA, target environment, source SHA, commits and complete diff relative to the baseline, validation and migration results, conflicts, and any existing source-target MR.
-7. After that authorization, push only the intended integration branch without force options. Create or update exactly one MR from `integration/<environment>` to `<environment>`, then read it back to verify source, target, title, description formatting, and open state.
+5. If migrations are present, follow **Migration Gates** against the staged merge result. Run the agreed focused validation and state exactly what was and was not tested.
+6. Follow **Review Before Every Commit**. After a non-blocking review and explicit commit authorization, create the merge commit and verify its SHA and final diff.
+7. Before requesting the explicit push/MR authorization, report the integration branch and SHA, target environment, source SHA, commits and complete diff relative to the baseline, pre-commit review, validation and migration results, conflicts, and any existing source-target MR.
+8. After that authorization, push only the intended integration branch without force options. Create or update exactly one MR from `integration/<environment>` to `<environment>`, then read it back to verify source, target, title, description formatting, and open state.
 
    ```bash
    git push origin integration/<environment>
@@ -125,6 +148,7 @@ Treat database migrations as a release contract, not ordinary text conflicts.
 
 - Never rename, renumber, delete, change dependencies of, or edit a migration that is already in a shared branch or deployed environment.
 - When two branches add migrations from the same ancestor, create a new empty merge migration that depends on both leaf migrations. Do not invent different fixes for different environments.
+- If a migration collision appears during a conflicted Git operation, include this remedy and its deployment impact in the conflict assessment, then wait for the user to handle the resolution.
 - The same end-of-graph merge migration must exist in the corresponding `dev`, `test`, and release code sets. When environment branches drift, compare `origin/dev`, `origin/test`, and the target release's commit and migration graphs before resolving.
 - Run both checks on the final merged code before it is pushed or proposed for merge:
 
@@ -184,5 +208,5 @@ Create or update exactly one `rX.Y.Z -> main` MR only after the appropriate expl
 ## Recovery And Reporting
 
 - For a private unshared feature, confirm no dependency before altering commits. For any shared branch or delivered change, add a corrective commit or use `git revert <bad-commit>`; then repeat the affected integration paths. If the change reached release, use a scoped `fix/...` or `hotfix/...` branch to that release, issue the next incremented production tag after verification, and verify deployment again.
-- Never use `git reset --hard`, `git push --force`, `git push --force-with-lease`, or web conflict resolution to repair shared integration, environment, release, or main history. Resolve conflicts locally in the relevant integration or release worktree, especially migration conflicts.
+- Never use `git reset --hard`, `git push --force`, `git push --force-with-lease`, or web conflict resolution to repair shared integration, environment, release, or main history. Keep conflicts local to the relevant integration or release worktree, analyze their impact, and wait for user resolution, especially for migration conflicts.
 - Report the precise state rather than a generic "released": source/target branches and SHAs, local commits, pushes, MR source-target pairs and states, conflicts, focused tests, migration checks, tag and pipeline evidence, deployment-MR state, rollout evidence, production acceptance, untested boundaries, and the remaining authorized-owner action.
