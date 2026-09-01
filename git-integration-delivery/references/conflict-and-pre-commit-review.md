@@ -51,7 +51,7 @@ git diff --name-only
 git ls-files --others --exclude-standard
 ```
 
-For an integration merge, also compare the staged result to its environment baseline with `git diff --cached origin/<environment> --`. For an ordinary feature or fix, use the repository's confirmed baseline and inspect both the staged delta and the branch delta so the proposed commit is understood in context.
+For an integration merge, also compare the staged result to its environment baseline with `git diff --cached origin/<environment> --`. For an ordinary `feat/<requirement-id>` or approved fix branch, use the repository's confirmed baseline and inspect both the staged delta and the branch delta so the proposed commit is understood in context.
 
 Protect validation integrity:
 

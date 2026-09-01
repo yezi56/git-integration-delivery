@@ -10,9 +10,9 @@ description: Safely deliver FarmLynk backend changes through integration branche
 Apply this workflow to the FarmLynk backend repository `back-end-group/farmlynk`. Its code paths are independent:
 
 ```text
-feature/fix -> integration/dev  -> dev
-feature/fix -> integration/test -> test
-approved feature/fix -> rX.Y.Z -> tag vX.Y.Z-N -> deployment-repository MR -> production
+feat/<requirement-id> -> integration/dev  -> dev
+feat/<requirement-id> -> integration/test -> test
+approved source branch -> rX.Y.Z -> tag vX.Y.Z-N -> deployment-repository MR -> production
 rX.Y.Z -> main
 ```
 
@@ -22,7 +22,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
 
 ## Authorization Boundaries
 
-- Separate local inspection, commits, remote feature pushes, integration pushes, MR creation or update, MR merge, release creation, tag push, deployment-repository MR merge, and production deployment. Require explicit authorization in the current request for every remote mutation and for commits or staging of files.
+- Separate local inspection, commits, remote source-branch pushes, integration pushes, MR creation or update, MR merge, release creation, tag push, deployment-repository MR merge, and production deployment. Require explicit authorization in the current request for every remote mutation and for commits or staging of files.
 - A request to "deliver" does not authorize a push, MR, tag, MR merge, or deployment. A production-tag push is a distinct high-impact authorization because it requests production deployment.
 - Only an authorized owner merges an MR to `dev`, `test`, `main`, or a protected release branch. Only QA or the release owner merges the deployment-repository MR and confirms production acceptance.
 - Preserve unrelated tracked and untracked files. Never stage, commit, push, or add local verification files, `.env` files, credentials, environment addresses, test data, or temporary scripts.
@@ -30,16 +30,16 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
 
 ## Branch Rules
 
-- New ordinary work starts from current `origin/main` as `feat/<task>-<short-english>` or `fix/<task>-<short-english>`. Starting from `dev` or `test` is allowed only for a documented dependency on unpublished environment code.
-- Use `hotfix/rX.Y.Z-<short-english>` for an urgent production fix and `rX.Y.Z` for a release candidate. Do not create new numeric, date, personal-prefix, ambiguous `test*`, or per-feature integration branches.
+- New ordinary requirement work starts from current `origin/main` as `feat/<requirement-id>`, for example `feat/7048051759` or `feat/vv1002`. Use the exact approved requirement ID and do not append an English title or description. Starting from `dev` or `test` is allowed only for a documented dependency on unpublished environment code.
+- Use `fix/<requirement-id>` only when the project owner explicitly classifies the work as a fix, `hotfix/rX.Y.Z-<requirement-id>` for an urgent production fix, and `rX.Y.Z` for a release candidate. Do not create new bare numeric, date, personal-prefix, ambiguous `test*`, descriptive-suffix, or per-requirement integration branches.
 - `integration/dev` and `integration/test` are the only long-lived integration branches. Do not create replacements if they are absent; report that the project owner must establish them from the current target baseline.
-- Ordinary work must not merge directly from `feature` or `fix` to `dev`, `test`, or `main`. Do not merge `integration/dev` into `integration/test`, or vice versa.
-- Direct `feature` or `fix` to `rX.Y.Z` is a controlled exception: it requires explicit release-owner approval and an MR explaining the validated environments, intended release, migration impact, and rollback plan.
+- Ordinary work must not merge directly from `feat/<requirement-id>` or `fix/<requirement-id>` to `dev`, `test`, or `main`. Do not merge `integration/dev` into `integration/test`, or vice versa.
+- Direct source branch to `rX.Y.Z` is a controlled exception: it requires explicit release-owner approval and an MR explaining the validated environments, intended release, migration impact, and rollback plan.
 - A private, unshared branch may be rewritten only after confirming no one depends on it. Once pushed, present in an MR, or merged into any integration, environment, release, or main branch, do not reset, rebase-and-force-push, or otherwise rewrite its shared history. Repair with a new fix commit or `git revert`.
 
-## Batch Feature Work Before Integration
+## Batch Source Work Before Integration
 
-- A feature or fix branch may accumulate multiple coherent commits and authorized pushes before it is delivered to an integration branch. Pushing the source branch does not by itself require an `integration/dev` or `integration/test` merge.
+- A source branch may accumulate multiple coherent commits and authorized pushes before it is delivered to an integration branch. Pushing the source branch does not by itself require an `integration/dev` or `integration/test` merge.
 - Default to delivering a complete, independently testable batch: finish the related edits, run the focused validation for that batch, then merge the accumulated source HEAD into each required integration branch once. Do not make integration branches mirror every intermediate source-branch push.
 - Deliver an intermediate batch only when the user explicitly requests environment validation, another team is blocked on that batch, or an urgent scoped fix requires it. State why the earlier integration handoff is needed and which source SHA it contains.
 - Each integration merge remains an explicit authorized operation. A later batch is a new source HEAD and follows the same inspection, validation, and authorization gates; do not rewrite an earlier shared integration delivery.
@@ -66,7 +66,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
    git diff --check
    ```
 
-4. Before an ordinary feature commit, verify the branch's baseline. For a normal branch this is `origin/main`; if it intentionally uses an environment baseline, make the dependency explicit in the MR. Follow **Review Before Every Commit** before creating the commit.
+4. Before an ordinary source-branch commit, verify the branch's baseline. For a normal branch this is `origin/main`; if it intentionally uses an environment baseline, make the dependency explicit in the MR. Follow **Review Before Every Commit** before creating the commit.
 5. For every MR, state business behavior, API/configuration/database-migration effects, validation commands and results, rollback considerations when relevant, and untested boundaries. Build Markdown descriptions with real newlines, then read the stored description back before reporting the MR.
 
    ```bash
@@ -93,9 +93,9 @@ Before every ordinary, merge, release-fix, revert, or conflict-resolution commit
 
 ## Deliver To An Environment
 
-Start this procedure only for a requested, independently testable source-branch batch. Confirm the source SHA represents all changes intended for the current environment handoff; ordinary intermediate source-branch pushes stay on the feature/fix branch until the batch is ready.
+Start this procedure only for a requested, independently testable source-branch batch. Confirm the source SHA represents all changes intended for the current environment handoff; ordinary intermediate source-branch pushes stay on `feat/<requirement-id>` or the explicitly approved fix branch until the batch is ready.
 
-Run this procedure independently for `integration/dev` with baseline `origin/dev` and target `dev`, then for `integration/test` with baseline `origin/test` and target `test`. Always merge the feature/fix branch into the corresponding integration branch, never one integration branch into the other.
+Run this procedure independently for `integration/dev` with baseline `origin/dev` and target `dev`, then for `integration/test` with baseline `origin/test` and target `test`. Always merge the source branch into the corresponding integration branch, never one integration branch into the other.
 
 1. Use a dedicated worktree containing the integration branch. If none exists, create a separate worktree only after confirming that the path is safe and available; leave the source worktree unchanged.
 2. Synchronize the local integration branch with its remote by fast-forward only. Stop and report local-only commits instead of overwriting them.
@@ -105,7 +105,7 @@ Run this procedure independently for `integration/dev` with baseline `origin/dev
    git merge --ff-only origin/integration/<environment>
    ```
 
-3. Bring the integration branch up to its own environment baseline before adding the feature/fix:
+3. Bring the integration branch up to its own environment baseline before adding the source branch:
 
    - If `origin/<environment>` is already an ancestor of the integration branch, continue.
    - If the integration branch is an ancestor of `origin/<environment>`, fast-forward it.
@@ -125,7 +125,7 @@ Run this procedure independently for `integration/dev` with baseline `origin/dev
 4. Start the source merge without creating its merge commit. If it conflicts, follow **Analyze Conflicts And Wait**. If it merges cleanly, leave the result staged and follow **Review Before Every Commit**.
 
    ```bash
-   git merge --no-ff --no-commit <feature-or-fix-branch>
+   git merge --no-ff --no-commit <source-branch>
    git status --short
    git diff --cached --check
    git diff --cached --stat origin/<environment>
@@ -169,14 +169,14 @@ git switch -c rX.Y.Z origin/main
 git push -u origin rX.Y.Z
 ```
 
-- A release contains only approved features and release fixes. Do not merge all of `dev` or `test` into it.
-- Select a feature/fix only after its relevant `dev` and `test` validation is known. Its controlled `feature/fix -> rX.Y.Z` MR must identify validated environment branch SHAs, the release target, migration impact, and rollback method.
+- A release contains only approved requirement branches and release fixes. Do not merge all of `dev` or `test` into it.
+- Select a source branch only after its relevant `dev` and `test` validation is known. Its controlled source-to-`rX.Y.Z` MR must identify validated environment branch SHAs, the release target, migration impact, and rollback method.
 - Once the release is frozen, admit only clearly scoped `fix/...` or `hotfix/...` changes. Re-run focused validation and migration gates against the current release code after every such change.
 - Do not assume an old release cannot return to `main`: a subsequent `rX.Y.Z -> main` MR is valid when it contains only commits added since the last release-to-main merge.
 
 ## Tag And Verify Production Release
 
-Tag only the latest confirmed commit of the intended release branch. First confirm the exact tag version and increment: a new release starts at `vX.Y.Z-0`; re-releases of the same release use `-1`, `-2`, and so on. Never tag a feature commit.
+Tag only the latest confirmed commit of the intended release branch. First confirm the exact tag version and increment: a new release starts at `vX.Y.Z-0`; re-releases of the same release use `-1`, `-2`, and so on. Never tag a requirement-branch commit.
 
 ```bash
 git fetch origin rX.Y.Z --tags
@@ -207,6 +207,6 @@ Create or update exactly one `rX.Y.Z -> main` MR only after the appropriate expl
 
 ## Recovery And Reporting
 
-- For a private unshared feature, confirm no dependency before altering commits. For any shared branch or delivered change, add a corrective commit or use `git revert <bad-commit>`; then repeat the affected integration paths. If the change reached release, use a scoped `fix/...` or `hotfix/...` branch to that release, issue the next incremented production tag after verification, and verify deployment again.
+- For a private unshared source branch, confirm no dependency before altering commits. For any shared branch or delivered change, add a corrective commit or use `git revert <bad-commit>`; then repeat the affected integration paths. If the change reached release, use a scoped `fix/<requirement-id>` or `hotfix/rX.Y.Z-<requirement-id>` branch to that release, issue the next incremented production tag after verification, and verify deployment again.
 - Never use `git reset --hard`, `git push --force`, `git push --force-with-lease`, or web conflict resolution to repair shared integration, environment, release, or main history. Keep conflicts local to the relevant integration or release worktree, analyze their impact, and wait for user resolution, especially for migration conflicts.
 - Report the precise state rather than a generic "released": source/target branches and SHAs, local commits, pushes, MR source-target pairs and states, conflicts, focused tests, migration checks, tag and pipeline evidence, deployment-MR state, rollout evidence, production acceptance, untested boundaries, and the remaining authorized-owner action.

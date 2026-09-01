@@ -3,9 +3,9 @@
 一个用于 Codex 的 FarmLynk Git 交付 Skill。它将功能开发、环境集成、release、生产标签与 `main` 回灌分开，并在每一步保留明确的授权和验证边界。
 
 ```text
-feature/fix -> integration/dev  -> dev
-feature/fix -> integration/test -> test
-approved feature/fix -> rX.Y.Z -> tag vX.Y.Z-N -> deployment-repository MR -> production
+feat/<requirement-id> -> integration/dev  -> dev
+feat/<requirement-id> -> integration/test -> test
+approved source branch -> rX.Y.Z -> tag vX.Y.Z-N -> deployment-repository MR -> production
 rX.Y.Z -> main
 ```
 
@@ -14,6 +14,7 @@ rX.Y.Z -> main
 ## 解决什么问题
 
 - 功能分支允许积累多次连贯提交和 push；默认在形成可独立验证的小批次后，才合入一次 integration，不让 integration 跟随每次中间 push。
+- 日常需求分支统一使用 `feat/<需求ID>`，例如 `feat/7048051759` 或 `feat/vv1002`；直接使用需求 ID，不追加英文标题或描述。
 - 防止功能分支直接合并到 `dev`、`test` 或 `main`；`integration/dev`、`integration/test` 也不能相互合并。
 - 在本地独立 worktree 中保留冲突现场，分析业务、契约、迁移和部署影响，返回审阅并等待使用者处理。
 - 每次 commit 前审阅完整拟提交 diff，按严重度报告高风险；`Critical` 或 `High` 发现必须返回使用者处理。
@@ -44,7 +45,7 @@ cp -R git-integration-delivery/git-integration-delivery ~/.codex/skills/
 在请求中明确调用：
 
 ```text
-使用 $git-integration-delivery 将当前功能分支按流程交付到 dev 和 test。
+使用 $git-integration-delivery 将当前 feat/7048051759 按流程交付到 dev 和 test。
 ```
 
 Skill 会先核对分支、工作区、远端引用、已有 MR、待交付批次 SHA，以及项目自己的聚焦验证命令。准备环境交付时，它会在相应 integration worktree 中同步环境基线，并用 `--no-commit` 准备合并结果，确保 commit 前可以审阅完整 diff。
@@ -61,7 +62,7 @@ Skill 会先核对分支、工作区、远端引用、已有 MR、待交付批�
 
 ## 交付检查点
 
-1. 确认本次是完整、可独立验证的功能分支批次；中间 push 默认仍留在功能分支。
+1. 确认当前来源分支符合 `feat/<需求ID>`，并且本次是完整、可独立验证的批次；中间 push 默认仍留在来源分支。
 2. `integration/<environment>` 存在，且先在独立 worktree 中与远端和对应环境基线同步；基线分叉时先完成一次独立的审阅与 merge commit，再开始功能合并。
 3. 合并出现冲突时保留现场，只读分析各方意图、业务与下游影响、解决选项和验证要求，返回使用者审阅并等待处理。
 4. 每个普通或 merge commit 前检查完整 staged diff、未纳入改动、契约兼容性和高风险面，并在干净 worktree 或隔离快照中验证精确 staged 版本；`Critical` 或 `High` 发现阻断提交，没有阻断项时仍需当前请求已明确授权提交。
