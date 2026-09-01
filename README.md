@@ -18,6 +18,7 @@ rX.Y.Z -> main
 - 防止功能分支直接合并到 `dev`、`test` 或 `main`；`integration/dev`、`integration/test` 也不能相互合并。
 - 在本地独立 worktree 中保留冲突现场，分析业务、契约、迁移和部署影响，返回审阅并等待使用者处理。
 - 每次 commit 前审阅完整拟提交 diff，按严重度报告高风险；`Critical` 或 `High` 发现必须返回使用者处理。
+- 每次完成实现、commit、push 或环境交付后，报告总 diff、测试 diff、排除测试后的 diff 行数，并分别列出新增与删除行。
 - 将提交、功能分支推送、integration 推送、MR 创建、MR 合并、release 标签和部署视为独立授权动作。
 - 用精确的 Git SHA、MR、流水线、部署和运行态证据区分“代码已合入”与“生产已完成”。
 
@@ -70,6 +71,18 @@ Skill 会先核对分支、工作区、远端引用、已有 MR、待交付批�
 6. 推送后，MR 必须回读并确认源分支、目标分支、标题、开放状态和描述格式。
 7. 生产标签必须指向确认的 release SHA；流水线成功、部署 MR 合并、预期镜像运行、Pod Ready、迁移和关键验收都完成后，才能称为生产完成。
 
+## Diff 行数报告
+
+Skill 使用内置脚本统计同一 diff 范围内的三组数据：
+
+```text
+总 diff：3 个文件，+120/-30，合计 150 行
+测试 diff：1 个文件，+40/-10，合计 50 行
+排除测试：2 个文件，+80/-20，合计 100 行
+```
+
+合计行数是 Git `numstat` 的新增行加删除行。二进制文件单独计数，不计入文本行数。报告同时注明基线与最终 SHA；测试路径分类不明确时会列出路径并按仓库约定校准。
+
 ## MR 描述格式
 
 MR 描述需要是真实 Markdown，而不是把 `\\n` 拼入单行 shell 参数。Skill 用带真实换行的变量传给 `glab`，并在写入后回读 `description`。验收条件是标题、列表、空行与命令文本完整，且没有可见的 `\\n` 字面量。
@@ -84,7 +97,8 @@ MR 描述需要是真实 Markdown，而不是把 `\\n` 拼入单行 shell 参数
 └── git-integration-delivery/
     ├── SKILL.md
     ├── agents/openai.yaml
-    └── references/conflict-and-pre-commit-review.md
+    ├── references/conflict-and-pre-commit-review.md
+    └── scripts/diff_line_counts.py
 ```
 
 根目录文件服务于 GitHub 使用者；真正安装到 Codex 的目录是 `git-integration-delivery/`。

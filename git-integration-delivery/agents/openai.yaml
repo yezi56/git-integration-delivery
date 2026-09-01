@@ -1,4 +1,4 @@
 interface:
   display_name: "Git 集成交付"
-  short_description: "按 FarmLynk 流程审阅冲突风险并安全交付代码"
-  default_prompt: "请使用 $git-integration-delivery 审阅冲突和提交风险，并按 FarmLynk 规则准备当前分支交付。"
+  short_description: "按 FarmLynk 流程审阅风险、统计差异并安全交付代码"
+  default_prompt: "请使用 $git-integration-delivery 审阅冲突和提交风险，报告总 diff、测试 diff 与排除测试后的行数，并按 FarmLynk 规则交付当前分支。"

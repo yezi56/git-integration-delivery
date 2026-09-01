@@ -1,6 +1,6 @@
 ---
 name: git-integration-delivery
-description: Safely deliver FarmLynk backend changes through integration branches, controlled release branches, production tags, deployment verification, and main, with conflict-impact and pre-commit risk review gates. Use for FarmLynk branch handoffs, commits, conflict analysis, release preparation, production tags, recovery, or merge-request work; for other repositories, inspect and follow their own local policy.
+description: Safely deliver FarmLynk backend changes through integration branches, controlled release branches, production tags, deployment verification, and main, with conflict-impact review, pre-commit risk review, and total/test/non-test diff line reporting. Use for FarmLynk branch handoffs, commits, conflict analysis, release preparation, production tags, recovery, or merge-request work; for other repositories, inspect and follow their own local policy.
 ---
 
 # FarmLynk Git Delivery And Release
@@ -56,7 +56,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
    git worktree list
    ```
 
-2. Confirm the requested source, target, and operation. Record source SHA, target SHA, existing open MRs for that source-target pair, and the project-specific focused validation command. Inspect repository documentation and manifests rather than guessing a test command.
+2. Confirm the requested source, target, and operation. Record the task-start SHA as the final diff-report baseline, source SHA, target SHA, existing open MRs for that source-target pair, and the project-specific focused validation command. Inspect repository documentation and manifests rather than guessing a test command.
 3. Fetch only the relevant remote refs, then confirm the required integration, environment, release, or main refs exist. Recheck current status and intended diff immediately before every staging, commit, push, tag, or MR action.
 
    ```bash
@@ -159,6 +159,26 @@ Treat database migrations as a release contract, not ordinary text conflicts.
 
 The deployment startup runs `python manage.py migrate --noinput` before Gunicorn. A failing migration plan can therefore prevent a new Pod from starting; successful code tests alone do not clear this gate.
 
+## Report Diff Line Counts
+
+At every completed implementation, commit, push, integration handoff, or release preparation, report all three text-diff measurements:
+
+- Total diff: file count, additions, deletions, and additions plus deletions.
+- Test diff: the same measurements for test files only.
+- Non-test diff: the same measurements after excluding test files.
+
+Use [scripts/diff_line_counts.py](scripts/diff_line_counts.py) so the three groups use one classification and add up exactly. Before a commit, run it with `--cached`. After completion, compare the task-start SHA or explicitly agreed delivery baseline to the final SHA:
+
+```bash
+python <skill-dir>/scripts/diff_line_counts.py --cached --show-paths
+python <skill-dir>/scripts/diff_line_counts.py --from <baseline-sha> --to <final-sha> --show-paths
+```
+
+- Inspect the reported test and non-test paths. Use `--test-regex` or `--non-test-regex` when repository conventions require an override; do not silently guess an ambiguous classification.
+- Define changed text lines as additions plus deletions from `git diff --numstat`. Report additions and deletions separately as well. Report binary files separately because Git does not provide text-line counts for them.
+- Name the exact baseline and final SHA or staged scope. If no test files changed, report a zero test diff rather than omitting it.
+- Recompute after any index, commit, merge, or baseline change. Never reuse counts from an earlier diff surface.
+
 ## Prepare And Maintain A Release
 
 Only the release owner creates or changes an `rX.Y.Z` branch. Confirm the exact release version and explicit authorization before making the branch.
@@ -209,4 +229,4 @@ Create or update exactly one `rX.Y.Z -> main` MR only after the appropriate expl
 
 - For a private unshared source branch, confirm no dependency before altering commits. For any shared branch or delivered change, add a corrective commit or use `git revert <bad-commit>`; then repeat the affected integration paths. If the change reached release, use a scoped `fix/<requirement-id>` or `hotfix/rX.Y.Z-<requirement-id>` branch to that release, issue the next incremented production tag after verification, and verify deployment again.
 - Never use `git reset --hard`, `git push --force`, `git push --force-with-lease`, or web conflict resolution to repair shared integration, environment, release, or main history. Keep conflicts local to the relevant integration or release worktree, analyze their impact, and wait for user resolution, especially for migration conflicts.
-- Report the precise state rather than a generic "released": source/target branches and SHAs, local commits, pushes, MR source-target pairs and states, conflicts, focused tests, migration checks, tag and pipeline evidence, deployment-MR state, rollout evidence, production acceptance, untested boundaries, and the remaining authorized-owner action.
+- Report the precise state rather than a generic "released": source/target branches and SHAs, local commits, pushes, MR source-target pairs and states, conflicts, focused tests, migration checks, total/test/non-test diff line counts, tag and pipeline evidence, deployment-MR state, rollout evidence, production acceptance, untested boundaries, and the remaining authorized-owner action.
