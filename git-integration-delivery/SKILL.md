@@ -23,6 +23,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
 ## Authorization Boundaries
 
 - Separate local inspection, commits, remote source-branch pushes, integration pushes, MR creation or update, MR merge, release creation, tag push, deployment-repository MR merge, and production deployment. Require explicit authorization in the current request for every remote mutation and for commits or staging of files.
+- Never create a local or remote branch unless the user explicitly authorizes that exact branch in the current request. If a required branch is absent, occupied, stale, diverged, or otherwise unsuitable, stop and ask the user; do not invent a feature, fix, delivery, or temporary branch name. Use a detached dedicated worktree when branch creation is unnecessary.
 - A request to "deliver" does not authorize a push, MR, tag, MR merge, or deployment. A production-tag push is a distinct high-impact authorization because it requests production deployment.
 - Only an authorized owner merges an MR to `dev`, `test`, `main`, or a protected release branch. Only QA or the release owner merges the deployment-repository MR and confirms production acceptance.
 - Preserve unrelated tracked and untracked files. Never stage, commit, push, or add local verification files, `.env` files, credentials, environment addresses, test data, or temporary scripts.
@@ -37,10 +38,18 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
 - Direct source branch to `rX.Y.Z` is a controlled exception: it requires explicit release-owner approval and an MR explaining the validated environments, intended release, migration impact, and rollback plan.
 - A private, unshared branch may be rewritten only after confirming no one depends on it. Once pushed, present in an MR, or merged into any integration, environment, release, or main branch, do not reset, rebase-and-force-push, or otherwise rewrite its shared history. Repair with a new fix commit or `git revert`.
 
+## Remote Source Branch Is The Only Feature Delivery Input
+
+- Put every feature or fix commit on the explicitly authorized existing remote source branch before integration. Fetch it, record `source_sha=$(git rev-parse origin/<source-branch>)`, and merge exactly `origin/<source-branch>` into `integration/<environment>`.
+- Never commit feature or fix implementation directly on an integration branch. Never use a detached HEAD, raw commit SHA, local-only branch head, synthetic tree commit, patch application, or cherry-pick as a substitute for the remote source-branch merge. Baseline synchronization with the corresponding environment branch remains the only exception described below.
+- A detached worktree may prepare a commit only to preserve a dirty checkout. Push that commit to the authorized existing source branch first, fetch the branch back, confirm its remote SHA, and only then begin integration delivery.
+- After creating the `--no-ff` integration merge commit, verify that its incoming parent equals the recorded remote source SHA: `test "$(git rev-parse HEAD^2)" = "$source_sha"`. Treat any mismatch as a delivery blocker and do not push the integration branch.
+- If the remote source branch and integration branch have diverged so that the required branch merge would reintroduce, discard, or conflict with already delivered behavior, stop and report the branch graph and affected diff. Do not bypass the source branch by placing an isolated corrective commit on integration.
+
 ## Batch Source Work Before Integration
 
 - A source branch may accumulate multiple coherent commits and authorized pushes before it is delivered to an integration branch. Pushing the source branch does not by itself require an `integration/dev` or `integration/test` merge.
-- Default to delivering a complete, independently testable batch: finish the related edits, run the focused validation for that batch, then merge the accumulated source HEAD into each required integration branch once. Do not make integration branches mirror every intermediate source-branch push.
+- Default to delivering a complete, independently testable batch: finish the related edits, run the focused validation for that batch, push and confirm the accumulated remote source HEAD, then merge it into each required integration branch once. Do not make integration branches mirror every intermediate source-branch push.
 - Deliver an intermediate batch only when the user explicitly requests environment validation, another team is blocked on that batch, or an urgent scoped fix requires it. State why the earlier integration handoff is needed and which source SHA it contains.
 - Each integration merge remains an explicit authorized operation. A later batch is a new source HEAD and follows the same inspection, validation, and authorization gates; do not rewrite an earlier shared integration delivery.
 
@@ -122,10 +131,12 @@ Run this procedure independently for `integration/dev` with baseline `origin/dev
 
    Verify the baseline merge commit and a clean index before continuing. Never start the source merge while this baseline merge is still pending.
 
-4. Start the source merge without creating its merge commit. If it conflicts, follow **Analyze Conflicts And Wait**. If it merges cleanly, leave the result staged and follow **Review Before Every Commit**.
+4. Fetch the authorized source branch, record its remote SHA, then start the merge from that exact remote-tracking ref without creating its merge commit. If it conflicts, follow **Analyze Conflicts And Wait**. If it merges cleanly, leave the result staged and follow **Review Before Every Commit**.
 
    ```bash
-   git merge --no-ff --no-commit <source-branch>
+   git fetch origin <source-branch>
+   source_sha=$(git rev-parse origin/<source-branch>)
+   git merge --no-ff --no-commit origin/<source-branch>
    git status --short
    git diff --cached --check
    git diff --cached --stat origin/<environment>
