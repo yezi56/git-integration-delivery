@@ -1,6 +1,6 @@
 ---
 name: git-integration-delivery
-description: Safely deliver FarmLynk backend changes through integration branches, controlled release branches, production tags, deployment verification, and main, with conflict-impact review, pre-commit risk review, and total/test/non-test diff line reporting. Use for FarmLynk branch handoffs, commits, conflict analysis, release preparation, production tags, recovery, or merge-request work; for other repositories, inspect and follow their own local policy.
+description: Safely deliver FarmLynk backend changes through integration branches, controlled release branches, production tags, deployment verification, and main, with conflict-impact review, risk-based validation, pre-commit risk review, and total/test/non-test diff line reporting. Use for FarmLynk branch handoffs, commits, conflict analysis, release preparation, production tags, recovery, or merge-request work; for other repositories, inspect and follow their own local policy.
 ---
 
 # FarmLynk Git Delivery And Release
@@ -49,7 +49,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
 ## Batch Source Work Before Integration
 
 - A source branch may accumulate multiple coherent commits and authorized pushes before it is delivered to an integration branch. Pushing the source branch does not by itself require an `integration/dev` or `integration/test` merge.
-- Default to delivering a complete, independently testable batch: finish the related edits, run the focused validation for that batch, push and confirm the accumulated remote source HEAD, then merge it into each required integration branch once. Do not make integration branches mirror every intermediate source-branch push.
+- Default to delivering a complete, independently testable batch: finish the related edits, run the risk-based validation selected for that batch, push and confirm the accumulated remote source HEAD, then merge it into each required integration branch once. Do not make integration branches mirror every intermediate source-branch push.
 - Deliver an intermediate batch only when the user explicitly requests environment validation, another team is blocked on that batch, or an urgent scoped fix requires it. State why the earlier integration handoff is needed and which source SHA it contains.
 - Each integration merge remains an explicit authorized operation. A later batch is a new source HEAD and follows the same inspection, validation, and authorization gates; do not rewrite an earlier shared integration delivery.
 
@@ -65,7 +65,7 @@ For a non-FarmLynk repository, do not assume its release branches, CI behavior, 
    git worktree list
    ```
 
-2. Confirm the requested source, target, and operation. Record the task-start SHA as the final diff-report baseline, source SHA, target SHA, existing open MRs for that source-target pair, and the project-specific focused validation command. Inspect repository documentation and manifests rather than guessing a test command.
+2. Confirm the requested source, target, and operation. Record the task-start SHA as the final diff-report baseline, source SHA, target SHA, existing open MRs for that source-target pair, and the project-specific validation commands. Select the validation level with [Risk-Based Validation](references/risk-based-validation.md); inspect repository documentation and manifests rather than guessing commands.
 3. Fetch only the relevant remote refs, then confirm the required integration, environment, release, or main refs exist. Recheck current status and intended diff immediately before every staging, commit, push, tag, or MR action.
 
    ```bash
@@ -96,9 +96,19 @@ Before starting a conflict-prone delivery or release operation, use a dedicated 
 
 Before every ordinary, merge, release-fix, revert, or conflict-resolution commit, follow [Conflict And Pre-Commit Review](references/conflict-and-pre-commit-review.md#pre-commit-risk-review).
 
-1. Use the reference to review the exact staged tree against the correct baseline, isolate validation from unstaged and untracked state, and report findings by severity with untested boundaries and residual risks.
+1. Use the reference to review the exact staged tree against the correct baseline, isolate validation from unstaged and untracked state, and report findings by severity with untested boundaries and residual risks. Choose and justify the validation level with [Risk-Based Validation](references/risk-based-validation.md).
 2. Treat every `Critical` or `High` finding, including a validation gap that could conceal one, as a blocker. Return the review without changing the proposed commit and wait for a new instruction.
 3. With no blocker, commit only when the current request explicitly authorizes committing after review; otherwise return the review and wait. Re-run the review if the index changes after it was reviewed.
+
+## Use Risk-Based Validation
+
+Full-suite testing is not the default for every commit. Read [Risk-Based Validation](references/risk-based-validation.md) whenever selecting or reusing validation evidence.
+
+- Every proposed commit receives the mandatory staged-diff review plus the repository's applicable fast checks and tests focused on the changed behavior. Documentation-only or metadata-only commits may need no runtime tests when their effect is bounded and the relevant validator passes.
+- Run broader affected-module or integration tests when the change crosses a module or contract boundary. Reserve a full suite for the high-risk triggers in the reference, an explicitly required repository gate, or a release stage that requires it.
+- Keep ordinary intermediate commits independently coherent, but validate and deliver them as one independently testable batch when practical. Do not rerun a full suite merely because the same source tree was committed, pushed, or named by another ref.
+- Record the exact tree SHA, commands, environment, and result. Reuse successful evidence only when the exact tree and relevant environment are unchanged. A different integration tree requires new applicable validation even when the feature commit was already tested.
+- A missing full-suite result is not itself a blocker when full validation is not required by the risk matrix and focused evidence covers the affected surface. Always report what was not tested.
 
 ## Deliver To An Environment
 
@@ -142,7 +152,7 @@ Run this procedure independently for `integration/dev` with baseline `origin/dev
    git diff --cached --stat origin/<environment>
    ```
 
-5. If migrations are present, follow **Migration Gates** against the staged merge result. Run the agreed focused validation and state exactly what was and was not tested.
+5. If migrations are present, follow **Migration Gates** against the staged merge result. Run the agreed risk-based validation against that integration tree and state exactly what was and was not tested.
 6. Follow **Review Before Every Commit**. After a non-blocking review and explicit commit authorization, create the merge commit and verify its SHA and final diff.
 7. Before requesting the explicit push/MR authorization, report the integration branch and SHA, target environment, source SHA, commits and complete diff relative to the baseline, pre-commit review, validation and migration results, conflicts, and any existing source-target MR.
 8. After that authorization, push only the intended integration branch without force options. Create or update exactly one MR from `integration/<environment>` to `<environment>`, then read it back to verify source, target, title, description formatting, and open state.
@@ -202,7 +212,7 @@ git push -u origin rX.Y.Z
 
 - A release contains only approved requirement branches and release fixes. Do not merge all of `dev` or `test` into it.
 - Select a source branch only after its relevant `dev` and `test` validation is known. Its controlled source-to-`rX.Y.Z` MR must identify validated environment branch SHAs, the release target, migration impact, and rollback method.
-- Once the release is frozen, admit only clearly scoped `fix/...` or `hotfix/...` changes. Re-run focused validation and migration gates against the current release code after every such change.
+- Once the release is frozen, admit only clearly scoped `fix/...` or `hotfix/...` changes. Re-run the validation level required by the change risk and migration gates against the current release code after every such change. Run the repository's required release suite before tagging; when no release policy exists, treat the full suite as the default release-candidate gate.
 - Do not assume an old release cannot return to `main`: a subsequent `rX.Y.Z -> main` MR is valid when it contains only commits added since the last release-to-main merge.
 
 ## Tag And Verify Production Release

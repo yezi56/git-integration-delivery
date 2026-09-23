@@ -59,6 +59,7 @@ Protect validation integrity:
 - If unrelated working-tree state must remain, validate an isolated materialization of the exact index tree using a repository-appropriate temporary checkout, container, or equivalent. Do not stash, delete, or include the user's unrelated changes.
 - Record the reviewed index tree with `review_tree=$(git write-tree)`. If this fails because the index contains intent-to-add or missing objects, treat the proposed snapshot as unreviewable; fully stage the intended content under the existing authorization, then restart the review. Before and after validation, require the validation checkout to have no unstaged tracked changes and require `git -C <validation-checkout> write-tree` to equal `$review_tree`; otherwise the validation does not apply to the proposed commit. `git write-tree` records the index as a tree object without creating a commit or moving a ref.
 - Recheck the staged diff after validation. If the exact staged snapshot cannot be tested, label that boundary explicitly; classify it as a blocker when the affected behavior could conceal a `Critical` or `High` failure.
+- Select the validation level with [Risk-Based Validation](risk-based-validation.md). The absence of a full-suite run is not a finding by itself when full validation is not required and focused evidence covers the affected behavior.
 
 Check at least these high-risk surfaces when they are present:
 
